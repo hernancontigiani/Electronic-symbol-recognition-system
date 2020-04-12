@@ -4,33 +4,32 @@
 In this lab, you will build and train a CNN model to classify electronic symbols. The dataset available was created a long time ago (2015), back then this problem was sort out using classic ANN, but it was necessary to extract some features like rotation angle, rescale image, using OpènCV in order to achieve a better performance.
 <br> This time the idea is create a CNN model that could automatically extract features from the dataset to make it not sensible of noise in the image like symbol rotation, rescale or offset. 
 
-## Dataset
-
-The dataset consist in three types of pasive electronic symbol component, "capacitor", "inductor" and "resistance". The original image of each one is "R1.png", "C1.png" and "L1.png". Others pictures were created based on the original one, making random rotation and rescale, to complete a possible dataset for testing.
-
 ## Import Libraries
 
 
 ```python
 from keras.preprocessing.image import ImageDataGenerator
 import numpy as np
+import os
 import matplotlib.pyplot as plt
+from PIL import Image
 ```
+
+    Using TensorFlow backend.
+    
 
 
 ```python
 import keras
 from keras.models import Sequential
 from keras.layers import Flatten, Dense, Dropout
+from keras.layers import Conv2D
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 from keras.models import load_model
 import tensorflow as tf
 ```
-
-    Using TensorFlow backend.
-    
 
 
 ```python
@@ -57,6 +56,59 @@ gpus
 
 
 
+## Dataset
+
+The dataset consist in three types of pasive electronic symbol component, "capacitor", "inductor" and "resistance". The original image of each one is "R1.png", "C1.png" and "L1.png".
+
+
+```python
+fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(10, 10)) # define your figure and axes
+
+capactor_symbol = plt.imread('C1.png')
+axs[0].imshow(capactor_symbol)
+axs[0].title.set_text('Capacitor')
+
+inductor_symbol = plt.imread('L1.png')
+axs[1].imshow(inductor_symbol)
+axs[1].title.set_text('Inductor')
+
+resistance_symbol = plt.imread('R1.png')
+axs[2].imshow(resistance_symbol)
+axs[2].title.set_text('Resistance')
+```
+
+
+![png](images/notebook_8_0.png)
+
+
+Based on them was created a dataset of 9000 symbols of each class using python sccript "dataset_creator.py". This script create new symbols applying rotation and offset. For example:
+
+
+```python
+path = './dataset/train/'
+capacitor_symbol_sample = os.listdir(path + '/capacitor')[0]
+inductor_symbol_sample = os.listdir(path + '/inductor')[0]
+resistance_symbol_sample = os.listdir(path + 'resistance')[0]
+
+fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(10, 10)) # define your figure and axes
+
+capactor_symbol = plt.imread(path + 'capacitor/' + capacitor_symbol_sample)
+axs[0].imshow(capactor_symbol)
+axs[0].title.set_text('Capacitor')
+
+inductor_symbol = plt.imread(path + 'inductor/' + inductor_symbol_sample)
+axs[1].imshow(inductor_symbol)
+axs[1].title.set_text('Inductor')
+
+resistance_symbol = plt.imread(path + 'resistance/' + resistance_symbol_sample)
+axs[2].imshow(resistance_symbol)
+axs[2].title.set_text('Resistance')
+```
+
+
+![png](images/notebook_10_0.png)
+
+
 <a id="item42"></a>
 
 # Construct ImageDataGenerator Instances
@@ -68,8 +120,8 @@ In this part, we will create ImageDataGenerator for the training set and another
 # Define Global Constants
 num_classes = 3
 image_resize = 224
-batch_size_training = 12
-batch_size_validation = 12
+batch_size_training = 20
+batch_size_test = 20
 ```
 
 
@@ -82,45 +134,30 @@ data_generator = ImageDataGenerator(
 
 ```python
 train_generator = data_generator.flow_from_directory(
-    'symbols/train',
+    'dataset/train',
     target_size=(image_resize, image_resize),
     batch_size=batch_size_training,
     class_mode='categorical')
 ```
 
-    Found 180 images belonging to 3 classes.
+    Found 21600 images belonging to 3 classes.
     
 
 
 ```python
 validation_generator = data_generator.flow_from_directory(
-    'symbols/valid',
+    'dataset/valid',
     target_size=(image_resize, image_resize),
     batch_size=batch_size_training,
     class_mode='categorical')
 ```
 
-    Found 36 images belonging to 3 classes.
+    Found 5400 images belonging to 3 classes.
     
 
 ## Create CNN Model
 
 In this part we are going to create a Keras CNN model from scratch.
-<br>Architecture of our model
-
-- (Input) -> [batch_size, 224, 2224, 1]  >> Apply 32 filter of [3x3]
-- (Convolutional layer 1)  -> [batch_size, 224, 224, 32]
-- (ReLU 1)  -> [?, 224, 224, 32]
-- (Max pooling 1) -> [?, 112, 112, 32]
-- (Convolutional layer 2)  -> [?, 112, 112, 64] 
-- (ReLU 2)  -> [?, 112, 112, 64] 
-- (Max pooling 2)  -> [?, 56, 56, 64] 
-- (ReLU 3)  -> [?, 28, 28, 128] 
-- (Max pooling 3)  -> [?, 28, 28, 128] 
-- [fully connected layer 3] -> [1x1024]
-- [ReLU 3]  -> [1x2048]
-- [Drop out]  -> [1x2048]
-- [fully connected layer 4] -> [1x3]
 
 ### Build and fit model
 
@@ -136,39 +173,36 @@ my_model = Sequential()
 # N: inputer shape of that layer
 # f: size of kernel filter
 # s: strides
-# p: padding+3
+# p: padding
 ```
 
 
 ```python
-
+kernel = (3,3)
+filters = 5
 # Layer 1
-# model.add(ZeroPadding2D(padding=(1,1),input_shape=(3,224,224), data_format='channels_first'))
-# (N-K+1)/S
-my_model.add(ZeroPadding2D(padding=(1,1),input_shape=(224,224,3))) # --> (226,226,1)
-my_model.add(Convolution2D(32, 3, 3, activation='relu'))  # --> (226-3+1)/1 --> (224,224,32)
-my_model.add(ZeroPadding2D(padding=(1,1))) # --> (226,226,32)
-my_model.add(Convolution2D(32, 3, 3, activation='relu')) # --> (226-3+1)/1 --> (224,224,32)
-my_model.add(MaxPooling2D((2,2), strides=(2,2))) # --> (224-2+1)/2 --> (112,112,112)
+my_model.add(Conv2D(filters, kernel, strides=(1, 1), padding='same', activation='relu', input_shape=(224,224,3)))
+my_model.add(Conv2D(filters, kernel, strides=(1, 1), padding='same', activation='relu'))
+my_model.add(MaxPooling2D((2,2), strides=(2,2)))
 
 # Layer 2
-my_model.add(ZeroPadding2D(padding=(1,1)))
-my_model.add(Convolution2D(64, 3, 3, activation='relu'))
-my_model.add(ZeroPadding2D(padding=(1,1)))
-my_model.add(Convolution2D(64, 3, 3, activation='relu'))
+my_model.add(Conv2D(2*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
+my_model.add(Conv2D(2*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
 my_model.add(MaxPooling2D((2,2), strides=(2,2)))
 
 # Layer 3
-my_model.add(ZeroPadding2D(padding=(1,1)))
-my_model.add(Convolution2D(128, 3, 3, activation='relu'))
-my_model.add(ZeroPadding2D(padding=(1,1)))
-my_model.add(Convolution2D(128, 3, 3, activation='relu'))
+my_model.add(Conv2D(3*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
+my_model.add(Conv2D(3*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
 my_model.add(MaxPooling2D((2,2), strides=(2,2)))
 
 # Layer 4: Fully Connected
 my_model.add(Flatten())
-# my_model.add(Dense(2048, activation='relu'))
-# my_model.add(Dropout(0.5))
+my_model.add(Dense(4, activation='relu'))
+my_model.add(Dropout(0.5))
+
+# Layer 5: Fully Connected
+my_model.add(Dense(4, activation='relu'))
+my_model.add(Dropout(0.5))
 
 # Layer 6: Outputlayer
 my_model.add(Dense(3, activation='softmax'))
@@ -180,69 +214,53 @@ my_model.summary()
     _________________________________________________________________
     Layer (type)                 Output Shape              Param #   
     =================================================================
-    zero_padding2d_1 (ZeroPaddin (None, 226, 226, 3)       0         
+    conv2d_1 (Conv2D)            (None, 224, 224, 5)       140       
     _________________________________________________________________
-    conv2d_1 (Conv2D)            (None, 224, 224, 32)      896       
+    conv2d_2 (Conv2D)            (None, 224, 224, 5)       230       
     _________________________________________________________________
-    zero_padding2d_2 (ZeroPaddin (None, 226, 226, 32)      0         
+    max_pooling2d_1 (MaxPooling2 (None, 112, 112, 5)       0         
     _________________________________________________________________
-    conv2d_2 (Conv2D)            (None, 224, 224, 32)      9248      
+    conv2d_3 (Conv2D)            (None, 112, 112, 10)      460       
     _________________________________________________________________
-    max_pooling2d_1 (MaxPooling2 (None, 112, 112, 32)      0         
+    conv2d_4 (Conv2D)            (None, 112, 112, 10)      910       
     _________________________________________________________________
-    zero_padding2d_3 (ZeroPaddin (None, 114, 114, 32)      0         
+    max_pooling2d_2 (MaxPooling2 (None, 56, 56, 10)        0         
     _________________________________________________________________
-    conv2d_3 (Conv2D)            (None, 112, 112, 64)      18496     
+    conv2d_5 (Conv2D)            (None, 56, 56, 15)        1365      
     _________________________________________________________________
-    zero_padding2d_4 (ZeroPaddin (None, 114, 114, 64)      0         
+    conv2d_6 (Conv2D)            (None, 56, 56, 15)        2040      
     _________________________________________________________________
-    conv2d_4 (Conv2D)            (None, 112, 112, 64)      36928     
+    max_pooling2d_3 (MaxPooling2 (None, 28, 28, 15)        0         
     _________________________________________________________________
-    max_pooling2d_2 (MaxPooling2 (None, 56, 56, 64)        0         
+    flatten_1 (Flatten)          (None, 11760)             0         
     _________________________________________________________________
-    zero_padding2d_5 (ZeroPaddin (None, 58, 58, 64)        0         
+    dense_1 (Dense)              (None, 4)                 47044     
     _________________________________________________________________
-    conv2d_5 (Conv2D)            (None, 56, 56, 128)       73856     
+    dropout_1 (Dropout)          (None, 4)                 0         
     _________________________________________________________________
-    zero_padding2d_6 (ZeroPaddin (None, 58, 58, 128)       0         
+    dense_2 (Dense)              (None, 4)                 20        
     _________________________________________________________________
-    conv2d_6 (Conv2D)            (None, 56, 56, 128)       147584    
+    dropout_2 (Dropout)          (None, 4)                 0         
     _________________________________________________________________
-    max_pooling2d_3 (MaxPooling2 (None, 28, 28, 128)       0         
-    _________________________________________________________________
-    flatten_1 (Flatten)          (None, 100352)            0         
-    _________________________________________________________________
-    dense_1 (Dense)              (None, 3)                 301059    
+    dense_3 (Dense)              (None, 3)                 15        
     =================================================================
-    Total params: 588,067
-    Trainable params: 588,067
+    Total params: 52,224
+    Trainable params: 52,224
     Non-trainable params: 0
     _________________________________________________________________
-    
-
-    C:\Python37\lib\site-packages\ipykernel_launcher.py:5: UserWarning: Update your `Conv2D` call to the Keras 2 API: `Conv2D(32, (3, 3), activation="relu")`
-      """
-    C:\Python37\lib\site-packages\ipykernel_launcher.py:7: UserWarning: Update your `Conv2D` call to the Keras 2 API: `Conv2D(32, (3, 3), activation="relu")`
-      import sys
-    C:\Python37\lib\site-packages\ipykernel_launcher.py:12: UserWarning: Update your `Conv2D` call to the Keras 2 API: `Conv2D(64, (3, 3), activation="relu")`
-      if sys.path[0] == '':
-    C:\Python37\lib\site-packages\ipykernel_launcher.py:14: UserWarning: Update your `Conv2D` call to the Keras 2 API: `Conv2D(64, (3, 3), activation="relu")`
-      
-    C:\Python37\lib\site-packages\ipykernel_launcher.py:19: UserWarning: Update your `Conv2D` call to the Keras 2 API: `Conv2D(128, (3, 3), activation="relu")`
-    C:\Python37\lib\site-packages\ipykernel_launcher.py:21: UserWarning: Update your `Conv2D` call to the Keras 2 API: `Conv2D(128, (3, 3), activation="relu")`
     
 
 
 ```python
 # Compile model using the adam optimizer.
-my_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+my_model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['accuracy'])
 ```
 
 
 ```python
 steps_per_epoch_training = len(train_generator)
 steps_per_epoch_validation = len(validation_generator)
-num_epochs = 20
+num_epochs = 1
 ```
 
 
@@ -257,47 +275,11 @@ fit_history = my_model.fit_generator(
 )
 ```
 
-    Epoch 1/20
-    15/15 [==============================] - 8s 519ms/step - loss: 28.2613 - accuracy: 0.6667 - val_loss: 0.0111 - val_accuracy: 1.0000
-    Epoch 2/20
-    15/15 [==============================] - 4s 245ms/step - loss: 0.0072 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 3/20
-    15/15 [==============================] - 4s 252ms/step - loss: 4.6822e-07 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 4/20
-    15/15 [==============================] - 4s 239ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 5/20
-    15/15 [==============================] - 4s 266ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 6/20
-    15/15 [==============================] - 4s 286ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 7/20
-    15/15 [==============================] - 4s 260ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 8/20
-    15/15 [==============================] - 4s 259ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 9/20
-    15/15 [==============================] - 6s 371ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 10/20
-    15/15 [==============================] - 7s 483ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 11/20
-    15/15 [==============================] - 4s 244ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 12/20
-    15/15 [==============================] - 4s 243ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 13/20
-    15/15 [==============================] - 4s 259ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 14/20
-    15/15 [==============================] - 4s 285ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 15/20
-    15/15 [==============================] - 4s 259ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 16/20
-    15/15 [==============================] - 4s 262ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 17/20
-    15/15 [==============================] - 7s 446ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 18/20
-    15/15 [==============================] - 6s 391ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 19/20
-    15/15 [==============================] - 5s 318ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
-    Epoch 20/20
-    15/15 [==============================] - 5s 304ms/step - loss: 0.0000e+00 - accuracy: 1.0000 - val_loss: 0.0000e+00 - val_accuracy: 1.0000
+    Epoch 1/1
+    1080/1080 [==============================] - 575s 532ms/step - loss: 1.1883 - accuracy: 0.3281 - val_loss: 1.0991 - val_accuracy: 0.3333
     
+
+It is clear the model has overfitting problems, we will talk more about it later
 
 
 ```python
@@ -315,25 +297,25 @@ my_model = load_model('classifier_my_model.h5')
 
 ```python
 train_generator = data_generator.flow_from_directory(
-    'symbols/train',
+    'dataset/train',
     target_size=(image_resize, image_resize),
     batch_size=batch_size_training,
     class_mode='categorical')
 ```
 
-    Found 180 images belonging to 3 classes.
+    Found 21600 images belonging to 3 classes.
     
 
 
 ```python
 validation_generator = data_generator.flow_from_directory(
-    'symbols/valid',
+    'dataset/valid',
     target_size=(image_resize, image_resize),
     batch_size=batch_size_training,
     class_mode='categorical')
 ```
 
-    Found 36 images belonging to 3 classes.
+    Found 5400 images belonging to 3 classes.
     
 
 
@@ -359,13 +341,13 @@ vgg16_model.layers[0].trainable = False
 vgg16_model.summary()
 ```
 
-    Model: "sequential_4"
+    Model: "sequential_3"
     _________________________________________________________________
     Layer (type)                 Output Shape              Param #   
     =================================================================
     vgg16 (Model)                (None, 512)               14714688  
     _________________________________________________________________
-    dense_2 (Dense)              (None, 3)                 1539      
+    dense_3 (Dense)              (None, 3)                 1539      
     =================================================================
     Total params: 14,716,227
     Trainable params: 1,539
@@ -385,7 +367,7 @@ vgg16_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=[
 ```python
 steps_per_epoch_training = len(train_generator)
 steps_per_epoch_validation = len(validation_generator)
-num_epochs = 10
+num_epochs = 2
 ```
 
 
@@ -400,34 +382,11 @@ fit_history = vgg16_model.fit_generator(
 )
 ```
 
-    Epoch 1/10
-    15/15 [==============================] - 9s 569ms/step - loss: 4.6290 - accuracy: 0.2944 - val_loss: 0.7779 - val_accuracy: 0.6389
-    Epoch 2/10
-    15/15 [==============================] - 4s 291ms/step - loss: 0.4017 - accuracy: 0.8278 - val_loss: 0.0382 - val_accuracy: 1.0000
-    Epoch 3/10
-    15/15 [==============================] - 4s 290ms/step - loss: 0.0497 - accuracy: 0.9833 - val_loss: 0.0050 - val_accuracy: 1.0000
-    Epoch 4/10
-    15/15 [==============================] - 5s 303ms/step - loss: 0.0098 - accuracy: 1.0000 - val_loss: 0.0019 - val_accuracy: 1.0000
-    Epoch 5/10
-    15/15 [==============================] - 4s 295ms/step - loss: 0.0052 - accuracy: 1.0000 - val_loss: 0.0014 - val_accuracy: 1.0000
-    Epoch 6/10
-    15/15 [==============================] - 5s 364ms/step - loss: 0.0045 - accuracy: 1.0000 - val_loss: 0.0013 - val_accuracy: 1.0000
-    Epoch 7/10
-    15/15 [==============================] - 5s 301ms/step - loss: 0.0040 - accuracy: 1.0000 - val_loss: 0.0020 - val_accuracy: 1.0000
-    Epoch 8/10
-    15/15 [==============================] - 5s 310ms/step - loss: 0.0036 - accuracy: 1.0000 - val_loss: 9.3726e-04 - val_accuracy: 1.0000
-    Epoch 9/10
-    15/15 [==============================] - 5s 308ms/step - loss: 0.0033 - accuracy: 1.0000 - val_loss: 0.0017 - val_accuracy: 1.0000
-    Epoch 10/10
-    15/15 [==============================] - 5s 305ms/step - loss: 0.0031 - accuracy: 1.0000 - val_loss: 6.7159e-04 - val_accuracy: 1.0000
+    Epoch 1/2
+    1080/1080 [==============================] - 558s 516ms/step - loss: 0.0259 - accuracy: 0.9937 - val_loss: 5.1982e-05 - val_accuracy: 1.0000
+    Epoch 2/2
+    1080/1080 [==============================] - 560s 518ms/step - loss: 1.8115e-04 - accuracy: 1.0000 - val_loss: 2.3787e-05 - val_accuracy: 1.0000
     
-
-In my case I run the trainin part at clobal (https://colab.research.google.com/) to get model fir in 2 minutes
-The results was:
-Epoch 1/2
-301/301 [==============================] - 113s 375ms/step - loss: 0.1124 - acc: 0.9612 - val_loss: 0.0308 - val_acc: 0.9920
-Epoch 2/2
-301/301 [==============================] - 106s 351ms/step - loss: 0.0237 - acc: 0.9940 - val_loss: 0.0171 - val_acc: 0.9954
 
 
 ```python
@@ -454,7 +413,7 @@ Create ImageDataGenerator for test
 
 ```python
 evaluate_generator = data_generator.flow_from_directory(
-    'symbols/test',
+    'dataset/test',
     target_size=(image_resize, image_resize),
     shuffle=False)
 ```
@@ -470,7 +429,7 @@ vgg16_evaluate_history = vgg16_model.evaluate_generator(
 )
 ```
 
-    1/1 [==============================] - 1s 551ms/step
+    1/1 [==============================] - 4s 4s/step
     
 
 
@@ -482,7 +441,7 @@ vgg16_evaluate_history
 
 
 
-    [0.1151948794722557, 1.0]
+    [0.008590773679316044, 1.0]
 
 
 
@@ -494,7 +453,7 @@ my_evaluate_history_resnet = my_model.evaluate_generator(
 )
 ```
 
-    1/1 [==============================] - 0s 417ms/step
+    1/1 [==============================] - 1s 623ms/step
     
 
 
@@ -506,14 +465,14 @@ my_evaluate_history_resnet
 
 
 
-    [14.925365447998047, 0.5]
+    [1.0987046957015991, 0.3333333432674408]
 
 
 
 # Results
 
 The results are the expected, the VGG16 has better accuracy and performance. Because the VGG16 is a pre-trained model.
-<br> Our model is trained with few images, we need a bigger dataset with more differents images to exatract features.
+<br> Our model is trained with few images, we need a bigger dataset with more differents images to extract features.
 <br> We will continue using de VGG16 in the follow section.
 
 ## Show predict results on
@@ -541,25 +500,25 @@ vgg16_predict
 
 
 
-    array([[9.9990499e-01, 1.8754554e-07, 9.4716685e-05],
-           [9.9789184e-01, 1.1470183e-06, 2.1069967e-03],
-           [9.7473508e-01, 3.2545511e-05, 2.5232382e-02],
-           [8.4437394e-01, 1.0604657e-02, 1.4502142e-01],
-           [7.3604111e-05, 9.9956399e-01, 3.6236621e-04],
-           [1.1090691e-04, 9.9941063e-01, 4.7844779e-04],
-           [5.2461575e-05, 9.9523926e-01, 4.7082864e-03],
-           [6.4009680e-07, 9.9999225e-01, 7.1005438e-06],
-           [6.7764865e-03, 5.5975770e-04, 9.9266374e-01],
-           [4.1463729e-03, 8.8203949e-04, 9.9497151e-01],
-           [4.9945549e-03, 4.3485090e-01, 5.6015456e-01],
-           [1.0968541e-03, 4.4326121e-01, 5.5564189e-01]], dtype=float32)
+    array([[1.0000000e+00, 6.5516542e-10, 1.0191002e-09],
+           [1.0000000e+00, 7.5523893e-11, 9.9649532e-11],
+           [9.9999964e-01, 1.9533883e-10, 3.1325740e-07],
+           [9.9772710e-01, 2.2804049e-04, 2.0449355e-03],
+           [5.2920357e-10, 9.9999976e-01, 2.4457503e-07],
+           [9.4578720e-11, 9.9993718e-01, 6.2762963e-05],
+           [7.4264422e-06, 9.9997163e-01, 2.1004544e-05],
+           [6.5416725e-06, 9.7943407e-01, 2.0559354e-02],
+           [4.5594124e-06, 2.0159774e-08, 9.9999547e-01],
+           [4.0135201e-05, 3.3530692e-09, 9.9995983e-01],
+           [6.1475910e-02, 1.5129245e-02, 9.2339480e-01],
+           [1.9764809e-04, 9.3403304e-07, 9.9980146e-01]], dtype=float32)
 
 
 
 
 ```python
 # Print list
-result_index = ['Capacitor' if (s == 0) else 'Inductior' if (s == 1) else 'Resistance' for s in np.argmax(vgg16_predict,axis=1)]
+result_index = ['Capacitor' if (s == 0) else 'Inductor' if (s == 1) else 'Resistance' for s in np.argmax(vgg16_predict,axis=1)]
 result_index
 ```
 
@@ -570,10 +529,10 @@ result_index
      'Capacitor',
      'Capacitor',
      'Capacitor',
-     'Inductior',
-     'Inductior',
-     'Inductior',
-     'Inductior',
+     'Inductor',
+     'Inductor',
+     'Inductor',
+     'Inductor',
      'Resistance',
      'Resistance',
      'Resistance',
@@ -581,15 +540,34 @@ result_index
 
 
 
+The data_generator used transform the images [0 255] vales to [-1 1], imshow not support values from -1 to 1, so we need to make a new data generator to show the testset
+
 
 ```python
-batch = evaluate_generator.next()
-batch_images = evaluate_generator.next()[0]
+my_data_generator = ImageDataGenerator(
+    rescale=1./255
+)
+
+test_generator = my_data_generator.flow_from_directory(
+    'dataset/test',
+    target_size=(image_resize, image_resize),
+    shuffle=False)
+```
+
+    Found 12 images belonging to 3 classes.
+    
+
+
+```python
+
+
+batch = test_generator.next()
+batch_images = test_generator.next()[0]
 
 fig, axs = plt.subplots(nrows=3, ncols=4, figsize=(20, 10)) # define your figure and axes
 ind = 0
 for ax1 in axs:
-    for ax2 in ax1: 
+    for ax2 in ax1:
         image_data = batch_images[ind]
         ax2.imshow(image_data)
         ax2.title.set_text(result_index[ind])
@@ -600,22 +578,8 @@ plt.show()
 
 ```
 
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers).
-    
 
-
-![png](images/notebook_53_1.png)
+![png](images/notebook_58_0.png)
 
 
   
