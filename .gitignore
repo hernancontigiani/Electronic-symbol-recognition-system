@@ -1,3 +1,6 @@
 *.h5
 .ipynb_checkpoints
+.vscode
 *.zip
+symbols
+dataset
