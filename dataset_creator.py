@@ -106,7 +106,7 @@ def main():
 
     os.mkdir(directory)
     if os.access(directory, os.F_OK) == False:
-        print("Error: Directory", symbols, "could not be created!")
+        print("Error: Directory", directory, "could not be created!")
         quit()
 
     capacitor_path = directory+"/capacitor"
