@@ -78,7 +78,7 @@ axs[2].title.set_text('Resistance')
 ```
 
 
-![png](notebook_files/notebook_8_0.png)
+![png](images/notebook_8_0.png)
 
 
 Based on them was created a dataset of 9000 symbols of each class using python sccript "dataset_creator.py". This script create new symbols based on data augmentation applying rotation and offset. For example:
@@ -106,7 +106,7 @@ axs[2].title.set_text('Resistance')
 ```
 
 
-![png](notebook_files/notebook_10_0.png)
+![png](images/notebook_10_0.png)
 
 
 <a id="item42"></a>
@@ -557,7 +557,7 @@ plt.show()
 ```
 
 
-![png](notebook_files/notebook_56_0.png)
+![png](images/notebook_56_0.png)
 
 
   
