@@ -78,10 +78,10 @@ axs[2].title.set_text('Resistance')
 ```
 
 
-![png](images/notebook_8_0.png)
+![png](notebook_files/notebook_8_0.png)
 
 
-Based on them was created a dataset of 9000 symbols of each class using python sccript "dataset_creator.py". This script create new symbols applying rotation and offset. For example:
+Based on them was created a dataset of 9000 symbols of each class using python sccript "dataset_creator.py". This script create new symbols based on data augmentation applying rotation and offset. For example:
 
 
 ```python
@@ -106,14 +106,14 @@ axs[2].title.set_text('Resistance')
 ```
 
 
-![png](images/notebook_10_0.png)
+![png](notebook_files/notebook_10_0.png)
 
 
 <a id="item42"></a>
 
 # Construct ImageDataGenerator Instances
 
-In this part, we will create ImageDataGenerator for the training set and another one for the validation set. Our model will be compared with VGG16 that was originally trained on 224 × 224 images, so we have to scale the image to 224x224
+In this part, we will create ImageDataGenerator for the training set and another one for the validation set. Our model will be compared with VGG16 that was originally trained on 224 × 224 images, so we have to scale the image to 224x224 and normalize between [0,1]
 
 
 ```python
@@ -157,14 +157,9 @@ validation_generator = data_generator.flow_from_directory(
 
 ## Create CNN Model
 
-In this part we are going to create a Keras CNN model from scratch.
+In this part we are going to create a Keras CNN model from scratch. The idea is to add many CONV+POOL layers to reduce de image size and reduce the weights to be train in the fully connected layers.
 
 ### Build and fit model
-
-
-```python
-my_model = Sequential()
-```
 
 
 ```python
@@ -178,74 +173,67 @@ my_model = Sequential()
 
 
 ```python
-kernel = (3,3)
-filters = 5
-# Layer 1
+my_model = Sequential()
+
+kernel = (5,5)
+filters = 8
+
+# CONV + POOL layers
 my_model.add(Conv2D(filters, kernel, strides=(1, 1), padding='same', activation='relu', input_shape=(224,224,3)))
-my_model.add(Conv2D(filters, kernel, strides=(1, 1), padding='same', activation='relu'))
 my_model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-# Layer 2
-my_model.add(Conv2D(2*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
-my_model.add(Conv2D(2*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
-my_model.add(MaxPooling2D((2,2), strides=(2,2)))
+for i in range(1,4):
+    my_model.add(Conv2D( (2**i)* filters, kernel, strides=(1, 1), padding='same', activation='relu'))
+    my_model.add(MaxPooling2D((2,2), strides=(2,2)))
 
-# Layer 3
-my_model.add(Conv2D(3*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
-my_model.add(Conv2D(3*filters, kernel, strides=(1, 1), padding='same',activation='relu'))
-my_model.add(MaxPooling2D((2,2), strides=(2,2)))
-
-# Layer 4: Fully Connected
+# Fully Connected layers
 my_model.add(Flatten())
-my_model.add(Dense(4, activation='relu'))
-my_model.add(Dropout(0.5))
+my_model.add(Dense(64, activation='relu'))
+my_model.add(Dropout(0.2))
 
-# Layer 5: Fully Connected
-my_model.add(Dense(4, activation='relu'))
-my_model.add(Dropout(0.5))
+my_model.add(Dense(64, activation='relu'))
+my_model.add(Dropout(0.2))
 
 # Layer 6: Outputlayer
-my_model.add(Dense(3, activation='softmax'))
+my_model.add(Dense(num_classes, activation='softmax'))
 
 my_model.summary()
 ```
 
-    Model: "sequential_1"
+    Model: "sequential_11"
     _________________________________________________________________
     Layer (type)                 Output Shape              Param #   
     =================================================================
-    conv2d_1 (Conv2D)            (None, 224, 224, 5)       140       
+    conv2d_32 (Conv2D)           (None, 224, 224, 8)       608       
     _________________________________________________________________
-    conv2d_2 (Conv2D)            (None, 224, 224, 5)       230       
+    max_pooling2d_30 (MaxPooling (None, 112, 112, 8)       0         
     _________________________________________________________________
-    max_pooling2d_1 (MaxPooling2 (None, 112, 112, 5)       0         
+    conv2d_33 (Conv2D)           (None, 112, 112, 16)      3216      
     _________________________________________________________________
-    conv2d_3 (Conv2D)            (None, 112, 112, 10)      460       
+    max_pooling2d_31 (MaxPooling (None, 56, 56, 16)        0         
     _________________________________________________________________
-    conv2d_4 (Conv2D)            (None, 112, 112, 10)      910       
+    conv2d_34 (Conv2D)           (None, 56, 56, 32)        12832     
     _________________________________________________________________
-    max_pooling2d_2 (MaxPooling2 (None, 56, 56, 10)        0         
+    max_pooling2d_32 (MaxPooling (None, 28, 28, 32)        0         
     _________________________________________________________________
-    conv2d_5 (Conv2D)            (None, 56, 56, 15)        1365      
+    conv2d_35 (Conv2D)           (None, 28, 28, 64)        51264     
     _________________________________________________________________
-    conv2d_6 (Conv2D)            (None, 56, 56, 15)        2040      
+    max_pooling2d_33 (MaxPooling (None, 14, 14, 64)        0         
     _________________________________________________________________
-    max_pooling2d_3 (MaxPooling2 (None, 28, 28, 15)        0         
+    flatten_7 (Flatten)          (None, 12544)             0         
     _________________________________________________________________
-    flatten_1 (Flatten)          (None, 11760)             0         
+    dense_19 (Dense)             (None, 64)                802880    
     _________________________________________________________________
-    dense_1 (Dense)              (None, 4)                 47044     
+    dropout_3 (Dropout)          (None, 64)                0         
     _________________________________________________________________
-    dropout_1 (Dropout)          (None, 4)                 0         
+    dense_20 (Dense)             (None, 64)                4160      
     _________________________________________________________________
-    dense_2 (Dense)              (None, 4)                 20        
+    dropout_4 (Dropout)          (None, 64)                0         
     _________________________________________________________________
-    dropout_2 (Dropout)          (None, 4)                 0         
-    _________________________________________________________________
-    dense_3 (Dense)              (None, 3)                 15        
+    dense_21 (Dense)             (None, 3)                 195       
     =================================================================
-    Total params: 52,224
-    Trainable params: 52,224
+    Total params: 875,155
+    Trainable params: 875,155
     Non-trainable params: 0
     _________________________________________________________________
     
@@ -276,10 +264,8 @@ fit_history = my_model.fit_generator(
 ```
 
     Epoch 1/1
-    1080/1080 [==============================] - 575s 532ms/step - loss: 1.1883 - accuracy: 0.3281 - val_loss: 1.0991 - val_accuracy: 0.3333
+    1080/1080 [==============================] - 580s 537ms/step - loss: 0.5627 - accuracy: 0.8022 - val_loss: 1.8811e-04 - val_accuracy: 1.0000
     
-
-It is clear the model has overfitting problems, we will talk more about it later
 
 
 ```python
@@ -429,45 +415,37 @@ vgg16_evaluate_history = vgg16_model.evaluate_generator(
 )
 ```
 
-    1/1 [==============================] - 4s 4s/step
+    1/1 [==============================] - 0s 444ms/step
     
 
 
 ```python
 # VGG16 performance
-vgg16_evaluate_history
+print("VGG16 Accuracy:", vgg16_evaluate_history[1])
 ```
 
-
-
-
-    [0.008590773679316044, 1.0]
-
-
+    VGG16 Accuracy: 1.0
+    
 
 
 ```python
-my_evaluate_history_resnet = my_model.evaluate_generator(
+my_evaluate_history = my_model.evaluate_generator(
     evaluate_generator,
     verbose=1,
 )
 ```
 
-    1/1 [==============================] - 1s 623ms/step
+    1/1 [==============================] - 0s 209ms/step
     
 
 
 ```python
 # My model performance
-my_evaluate_history_resnet
+print("My model Accuracy:", my_evaluate_history[1])
 ```
 
-
-
-
-    [1.0987046957015991, 0.3333333432674408]
-
-
+    My model Accuracy: 0.75
+    
 
 # Results
 
@@ -579,7 +557,7 @@ plt.show()
 ```
 
 
-![png](images/notebook_58_0.png)
+![png](notebook_files/notebook_56_0.png)
 
 
   
