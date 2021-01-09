@@ -557,7 +557,7 @@ plt.show()
 ```
 
 
-![png](images/notebook_56_0.png)
+![png](images/notebook_58_0.png)
 
 
   
